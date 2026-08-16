@@ -32,6 +32,8 @@
   <div id="result">버튼을 눌러 위치를 확인하세요.</div>
 
   <script>
+    let locationUpdates = [];
+
     function getLocation() {
       const result = document.getElementById("result");
 
@@ -40,19 +42,44 @@
         return;
       }
 
-      result.innerHTML = "📡 현재 위치를 확인하는 중...";
+      result.innerHTML = "📡 고정밀도 위치를 확인하는 중...";
+      locationUpdates = [];
+      let updateCount = 0;
+      const maxUpdates = 5;
 
-      navigator.geolocation.getCurrentPosition(
+      const watchId = navigator.geolocation.watchPosition(
         function(position) {
-          const latitude = position.coords.latitude;
-          const longitude = position.coords.longitude;
-          const accuracy = position.coords.accuracy;
+          updateCount++;
+          locationUpdates.push({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            altitude: position.coords.altitude,
+            accuracy: position.coords.accuracy
+          });
 
-          result.innerHTML =
-            "✅ 위치 확인 성공<br><br>" +
-            "위도: " + latitude + "°<br>" +
-            "경도: " + longitude + "°<br>" +
-            "정확도: 약 " + Math.round(accuracy) + "m";
+          if (updateCount >= maxUpdates) {
+            navigator.geolocation.clearWatch(watchId);
+            
+            // 평균값 계산으로 오차 최소화
+            const avgLatitude = locationUpdates.reduce((sum, loc) => sum + loc.latitude, 0) / locationUpdates.length;
+            const avgLongitude = locationUpdates.reduce((sum, loc) => sum + loc.longitude, 0) / locationUpdates.length;
+            const avgAltitude = locationUpdates.reduce((sum, loc) => sum + (loc.altitude || 0), 0) / locationUpdates.length;
+            const minAccuracy = Math.min(...locationUpdates.map(loc => loc.accuracy));
+
+            const x = avgLongitude;
+            const y = avgLatitude;
+            const z = avgAltitude;
+
+            result.innerHTML =
+              "✅ 위치 확인 성공 (고정밀도)<br><br>" +
+              "위도: " + avgLatitude.toFixed(8) + "°<br>" +
+              "경도: " + avgLongitude.toFixed(8) + "°<br>" +
+              "오차범위: 약 " + Math.round(minAccuracy) + "m<br><br>" +
+              "<strong>좌표값 (x, y, z)</strong><br>" +
+              "X값(경도): " + x.toFixed(8) + "<br>" +
+              "Y값(위도): " + y.toFixed(8) + "<br>" +
+              "Z값(고도): " + (z !== 0 ? z.toFixed(2) + "m" : "사용 불가");
+          }
         },
         function(error) {
           let message = "";
@@ -75,7 +102,7 @@
         },
         {
           enableHighAccuracy: true,
-          timeout: 15000,
+          timeout: 10000,
           maximumAge: 0
         }
       );
